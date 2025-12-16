@@ -1,8 +1,9 @@
 import subprocess
 from pathlib import Path
+import os
 
-def download_workshop_item(id: int, user:str, passwd:str, dest:Path) -> None:
-    subprocess.run([
+def download_workshop_item(id: int, user:str, passwd:str, dest:Path, manifest:bool=False) -> None:
+    command = [
         "DepotDownloader", 
         "-app", 
         "1074100",
@@ -15,10 +16,12 @@ def download_workshop_item(id: int, user:str, passwd:str, dest:Path) -> None:
         "-remember-password",
         "-dir",
         str(dest)]
-    )
+    if manifest:
+        command.append("-manifest-only")
+    subprocess.run(command)
 
-def download_depot(app_id: int, user:str, passwd:str, dest:Path) -> None:
-    subprocess.run([
+def download_depot(app_id: int, user:str, passwd:str, dest:Path, manifest:bool=False) -> None:
+    command =  [
         "DepotDownloader", 
         "-app", 
         str(app_id),
@@ -28,5 +31,12 @@ def download_depot(app_id: int, user:str, passwd:str, dest:Path) -> None:
         passwd,
         "-remember-password",
         "-dir",
-        str(dest)]
-    )
+        str(dest)
+    ]
+    if manifest:
+        command.append("-manifest-only")
+    subprocess.run( command)
+
+def download_server(usr:str, pwd:str, path:Path, manifest:bool=False) -> None:
+    os.makedirs(path, exist_ok=True)
+    download_depot(233780, usr, pwd, path, manifest=manifest)

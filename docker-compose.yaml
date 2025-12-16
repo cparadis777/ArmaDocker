@@ -11,4 +11,4 @@ services:
     env_file:
       - .env
     volumes:
-      - ./server:/opt/server
+      - ./arma:/opt/arma
