@@ -6,7 +6,7 @@ def download_workshop_item(id: int, user:str, passwd:str, dest:Path, manifest:bo
     command = [
         "DepotDownloader", 
         "-app", 
-        "1074100",
+        "107410",
         "-pubfile", 
         str(id),
         "-username",

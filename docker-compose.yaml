@@ -11,4 +11,11 @@ services:
     env_file:
       - .env
     volumes:
-      - ./arma:/opt/arma
+      - ./arma:/arma:Z
+      - server_files:/server
+      - credential_cache:/root/.local/
+volumes:
+  credential_cache:
+    external: true
+  server_files:
+    external: true

@@ -17,6 +17,7 @@ RUN apt-get update \
         git \
         zip \
         unzip \
+        rename \
     && \
     apt-get remove --purge -y \
     && \
@@ -25,7 +26,6 @@ RUN apt-get update \
     apt-get autoremove -y \
     && \
     rm -rf /var/lib/apt/lists/*
-
 RUN wget https://github.com/SteamRE/DepotDownloader/releases/latest/download/DepotDownloader-linux-x64.zip -O /tmp/depotdownloader.zip \
     && \
     mkdir -p /usr/bin/depotdownloader \
@@ -35,17 +35,18 @@ RUN wget https://github.com/SteamRE/DepotDownloader/releases/latest/download/Dep
     mv /tmp/depotdownloader/DepotDownloader /usr/bin/DepotDownloader \
     && \
     rm /tmp/depotdownloader.zip
-    
+
 RUN pip install --break-system-packages dotenv
-RUN ls /usr/bin/depotdownloader
 EXPOSE 2302/udp
 EXPOSE 2303/udp
 EXPOSE 2304/udp
 EXPOSE 2305/udp
 EXPOSE 2306/udp
-RUN mkdir /arma
-WORKDIR /arma
 
+RUN mkdir -p /home/steam && chown 1000:1000 /home/steam
+VOLUME /root/.local/
+RUN mkdir /server
+VOLUME /server
 STOPSIGNAL SIGINT
 COPY *.py /
 
