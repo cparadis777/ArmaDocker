@@ -1,13 +1,19 @@
+import shutil
 import json
 import os
 from pathlib import Path
 import depot_downloader
 import dataclasses
+import logging
+import uuid
+
+logger= logging.getLogger("Manager")
 
 @dataclasses.dataclass
 class Mod():
     name: str
     id: int
+    order: int = 99999
 
 
 def parse_mod_config(config_path: Path) -> tuple[list[Mod], list[Mod]]:
@@ -16,31 +22,46 @@ def parse_mod_config(config_path: Path) -> tuple[list[Mod], list[Mod]]:
     with config_path.open('r', encoding='utf-8') as config_file:
         config_data = json.load(config_file)
     
-    server_mods: list[Mod] = [
-        Mod(item["name"], item["id"]) 
-        for item in config_data.get("server_mods", {})
-    ]
+    server_mods: list[Mod] = []
+    client_mods: list[Mod] = []
     
-    client_mods: list[Mod] = [
-        Mod(item["name"], item["id"]) 
-        for item in config_data.get("client_mods", {})
-    ]
+    for item in config_data.get("server_mods", []):
+        order = item.get("order", 99999)
+        server_mods.append(Mod(item["name"], item["id"], order=order))
+    
+    for item in config_data.get("client_mods", []):
+        order = item.get("order", 99999)
+        client_mods.append(Mod(item["name"], item["id"], order=order))
 
     return client_mods, server_mods
 
-def download_mods(config_path:Path, usr:str, pwd:str, base_path:Path) -> None:
+def download_mods(config_path:Path, usr:str, pwd:str, base_path:Path, max_downloads: int) -> tuple[list[Mod], list[Mod]]:
     """Download mods specified in the configuration file."""
     client_mods, server_mods = parse_mod_config(config_path)
+    
 
     os.makedirs(base_path/"client_mods", exist_ok=True)
     os.makedirs(base_path/'server_mods', exist_ok=True)
-   
+    
+    client_mods_tuples: list[tuple[int, Path, bool]] = []
+    server_mods_tuples: list[tuple[int, Path, bool]] = []
+    logger.info("Created client and server mods tuples")
     for mod in client_mods:
-        depot_downloader.download_workshop_item(mod.id,usr, pwd, base_path/"client_mods"/mod.name)
-
+        client_mods_tuples.append( (mod.id, base_path/"client_mods"/mod.name, False) )
+    
     for mod in server_mods:
-        depot_downloader.download_workshop_item(mod.id, usr, pwd, base_path/"server_mods"/mod.name)
+        server_mods_tuples.append( (mod.id, base_path/"server_mods"/mod.name, False) )
+
+    logger.info("Downloading client mods")
+    depot_downloader.download_workshop_items_parallel(client_mods_tuples, usr, pwd, max_downloads=max_downloads)
+    logger.info("Downloading server mods")
+
+    depot_downloader.download_workshop_items_parallel(server_mods_tuples, usr, pwd, max_downloads=max_downloads)
+
+    logger.info("Lowercasing mods")
+
     lowercase_mods(base_path)
+    return client_mods, server_mods
 
 def copy_keys(mods_path:Path, server_path:Path) -> None:
     """Copy the keys from the mods to the server directory."""
@@ -51,7 +72,7 @@ def copy_keys(mods_path:Path, server_path:Path) -> None:
         mod_key_path = mod_dir/"keys"
         if mod_key_path.exists() and mod_key_path.is_dir():
             for key_file in mod_key_path.iterdir():
-                target = server_keys_path/key_file.name
+                target = key_file
                 link = Path(server_keys_path/key_file.name)
                 
                 # If symlink already exists, remove it first
@@ -77,32 +98,60 @@ def copy_mods(mods_path:Path, server_path:Path) -> list[str]:
 
 def lowercase_mods(target_path: Path):
     """
-    Recursively renames all files and directories to lowercase.
+    Recursively renames files and directories to lowercase.
+    Uses an external 'logger' object for reporting.
     """
-    # Check if the path exists
     if not os.path.exists(target_path):
-        print(f"Error: The path '{target_path}' does not exist.")
+        logger.error(f"Path not found: {target_path}")
         return
 
-    # topdown=False ensures we rename children before their parent directories
+    logger.info(f"Starting recursive lowercase rename in: {target_path}")
+
+    # topdown=False is critical to rename children before parent directories
     for root, dirs, files in os.walk(target_path, topdown=False):
-        
-        # Process both files and directories in the current 'root'
         for name in files + dirs:
+            if name.startswith("."):
+                continue
             old_path = os.path.join(root, name)
-            
-            # Create the lowercase version of the name
             new_name = name.lower()
             new_path = os.path.join(root, new_name)
 
-            # Only rename if the name actually changed
-            if old_path != new_path:
-                try:
-                    # Handle potential collisions (e.g., 'File.txt' and 'file.txt')
-                    if os.path.exists(new_path):
-                        print(f"Skipping: {new_path} already exists.")
+            # Skip if already lowercase
+            if name == new_name:
+                continue
+
+            try:
+                # 1. Handle Case-Insensitive Filesystems (Windows/Mac/Docker Bind Mounts)
+                # If path exists and samefile() is True, it's a "self-collision"
+                if os.path.exists(new_path) and os.path.samefile(old_path, new_path):
+                    temp_name = f"{uuid.uuid4().hex}.tmp"
+                    temp_path = os.path.join(root, temp_name)
+                    
+                    os.rename(old_path, temp_path)
+                    os.rename(temp_path, new_path)
+                    logger.info(f"Renamed (Bridge): '{name}' -> '{new_name}'")
+
+                # 2. Handle True Collisions (Native Linux Case-Sensitivity)
+                # If path exists but samefile() is False, these are two different files
+                elif os.path.exists(new_path):
+                    if os.path.isdir(new_path):
+                        shutil.rmtree(new_path)
+                        logger.warning(f"Collision: Deleted existing directory '{new_path}' to overwrite")
                     else:
-                        os.rename(old_path, new_path)
-                        print(f"Renamed: {old_path} -> {new_path}")
-                except OSError as e:
-                    print(f"Error renaming {old_path}: {e}")
+                        os.remove(new_path)
+                        logger.warning(f"Collision: Deleted existing file '{new_path}' to overwrite")
+                    
+                    os.rename(old_path, new_path)
+                    logger.info(f"Renamed (Overwrite): '{name}' -> '{new_name}'")
+
+                # 3. Simple Rename
+                else:
+                    os.rename(old_path, new_path)
+                    logger.info(f"Renamed: '{name}' -> '{new_name}'")
+
+            except OSError as e:
+                logger.error(f"Failed to rename '{old_path}' to '{new_path}': {e}")
+            except Exception as e:
+                logger.critical(f"Unexpected error during processing of '{old_path}': {e}")
+
+    logger.info("Lowercase rename process completed.")

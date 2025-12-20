@@ -12,6 +12,7 @@ services:
       - .env
     volumes:
       - ./arma:/arma:Z
+      - ./arma/logs:/logs:Z
       - server_files:/server
       - credential_cache:/root/.local/
 volumes:
