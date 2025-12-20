@@ -45,7 +45,8 @@ def download_mods(config_path:Path, usr:str, pwd:str, base_path:Path, max_downlo
     
     client_mods_tuples: list[tuple[int, Path, bool]] = []
     server_mods_tuples: list[tuple[int, Path, bool]] = []
-    logger.info("Created client and server mods tuples")
+
+
     for mod in client_mods:
         client_mods_tuples.append( (mod.id, base_path/"client_mods"/mod.name, False) )
     
@@ -63,23 +64,53 @@ def download_mods(config_path:Path, usr:str, pwd:str, base_path:Path, max_downlo
     lowercase_mods(base_path)
     return client_mods, server_mods
 
-def copy_keys(mods_path:Path, server_path:Path) -> None:
-    """Copy the keys from the mods to the server directory."""
-    server_keys_path = server_path/"keys"
-    os.makedirs(server_keys_path, exist_ok=True)
+def copy_keys(mods_path: Path, server_path: Path) -> None:
+    """
+    Recursively finds all .bikey files within the mods_path 
+    and symlinks them into the server/keys directory.
+    """
 
-    for mod_dir in mods_path.iterdir():
-        mod_key_path = mod_dir/"keys"
-        if mod_key_path.exists() and mod_key_path.is_dir():
-            for key_file in mod_key_path.iterdir():
-                target = key_file
-                link = Path(server_keys_path/key_file.name)
-                
-                # If symlink already exists, remove it first
-                if link.exists() or link.is_symlink():
-                    link.unlink()
-                
-                link.symlink_to(target)
+    server_keys_path = server_path / "keys"
+    
+    try:
+        os.makedirs(server_keys_path, exist_ok=True)
+        logger.debug(f"Ensuring keys directory exists: {server_keys_path}")
+    except OSError as e:
+        logger.error(f"Could not create keys directory {server_keys_path}: {e}")
+        return
+
+    # rglob("*.[bB][iI][kK][eE][yY]") makes it case-insensitive for the search
+    # regardless of the host OS behavior.
+    bikey_files = list(mods_path.rglob("*.[bB][iI][kK][eE][yY]"))
+
+
+    if not bikey_files:
+        logger.warning(f"No .bikey files found in {mods_path}")
+        return
+
+    for key_file in bikey_files:
+        # Use resolve() to get the absolute path; symlinks work better with absolute paths
+        target = key_file.resolve()
+        
+        # The link name should be lowercase for Linux server compatibility
+        link_name = key_file.name.lower()
+        link = server_keys_path / link_name
+        
+        try:
+            # Check for existing file or broken symlink
+            if link.exists() or link.is_symlink():
+                link.unlink()
+            
+            # Create the symlink
+            link.symlink_to(target)
+            logger.debug(f"Symlinked key: {link_name} -> {target}")
+            
+        except OSError as e:
+            logger.error(f"Failed to symlink {key_file.name}: {e}")
+        except Exception as e:
+            logger.critical(f"Unexpected error with key {key_file.name}: {e}")
+
+    logger.debug(f"Key synchronization complete. Processed {len(bikey_files)} keys.")
 
 def copy_mods(mods_path:Path, server_path:Path) -> list[str]:
     """Copy the mods from the mods directory to the server directory."""
@@ -129,25 +160,25 @@ def lowercase_mods(target_path: Path):
                     
                     os.rename(old_path, temp_path)
                     os.rename(temp_path, new_path)
-                    logger.info(f"Renamed (Bridge): '{name}' -> '{new_name}'")
+                    logger.debug(f"Renamed (Bridge): '{name}' -> '{new_name}'")
 
                 # 2. Handle True Collisions (Native Linux Case-Sensitivity)
                 # If path exists but samefile() is False, these are two different files
                 elif os.path.exists(new_path):
                     if os.path.isdir(new_path):
                         shutil.rmtree(new_path)
-                        logger.warning(f"Collision: Deleted existing directory '{new_path}' to overwrite")
+                        logger.debug(f"Collision: Deleted existing directory '{new_path}' to overwrite")
                     else:
                         os.remove(new_path)
-                        logger.warning(f"Collision: Deleted existing file '{new_path}' to overwrite")
+                        logger.debug(f"Collision: Deleted existing file '{new_path}' to overwrite")
                     
                     os.rename(old_path, new_path)
-                    logger.info(f"Renamed (Overwrite): '{name}' -> '{new_name}'")
+                    logger.debug(f"Renamed (Overwrite): '{name}' -> '{new_name}'")
 
                 # 3. Simple Rename
                 else:
                     os.rename(old_path, new_path)
-                    logger.info(f"Renamed: '{name}' -> '{new_name}'")
+                    logger.debug(f"Renamed: '{name}' -> '{new_name}'")
 
             except OSError as e:
                 logger.error(f"Failed to rename '{old_path}' to '{new_path}': {e}")

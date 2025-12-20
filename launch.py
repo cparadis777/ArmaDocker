@@ -4,24 +4,24 @@ import os
 import depot_downloader
 import mods
 import subprocess
-import datetime
 import logging
-from logging.handlers import RotatingFileHandler
-import sys
+import setup
 
-log_file = f"arma_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
-log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-file_handler = RotatingFileHandler(f"/logs/{log_file}", maxBytes=5*1024*1024, backupCount=2)
-file_handler.setFormatter(log_formatter)
-console_handler = logging.StreamHandler(sys.stdout)
-console_handler.setFormatter(log_formatter)
-console_handler.setLevel(logging.INFO)
+logger =logging.getLogger("Manager")
+server_logger = logging.getLogger("server")
 
-logger = logging.getLogger("Manager")
-logger.setLevel(logging.DEBUG)
-logger.addHandler(file_handler)
-logger.addHandler(console_handler)
-
+ARMA_KEYS: list[str] = [
+    "a3.bikey",
+    "a3c.bikey",
+    "csla.bikey",
+    'ef.bikey',
+    "gm.bikey",
+    "gm.bikey",
+    "rf.bikey",
+    "spe.bikey",
+    "vn.bikey",
+    "ws.bikey",
+]
 
 def launch_server(server_path: Path, client_mods: list[mods.Mod], server_mods: list[mods.Mod]) -> None:
     """Launch the Arma 3 server.""" 
@@ -55,7 +55,7 @@ def launch_server(server_path: Path, client_mods: list[mods.Mod], server_mods: l
         if clean_line:
             # We use logger.debug (or a custom level) for server lines 
             # so they don't show up in the console_handler (set to INFO)
-            logger.debug(f"[SERVER] {clean_line}")
+            server_logger.debug(f"[SERVER] {clean_line}")
 
     process.wait()
     
@@ -98,7 +98,9 @@ def delete_or_unlink(files: list[Path]):
             os.remove(file)
 
 def cleanup_files(server_path:Path):
-    keys_dir: list[Path] = list((server_path/"keys").iterdir())
+
+    keys_dir: list[Path] = [key for key in list((server_path/"keys").iterdir()) if key.name not in ARMA_KEYS]
+    logger.error(keys_dir)
     mod_dirs: list[Path] = list(server_path.glob("@*"))
     mission_dir: list[Path] = list((server_path/"mpmissions").iterdir())
     delete_or_unlink(keys_dir)
@@ -107,6 +109,8 @@ def cleanup_files(server_path:Path):
 
 
 if __name__ == "__main__":
+    setup.setup_logging()
+
     load_dotenv()
     base_path = Path("/arma")
     usr = os.environ.get("STEAM_USER", "")
@@ -119,12 +123,12 @@ if __name__ == "__main__":
     os.makedirs("/logs", exist_ok=True)
 
     logger.info("Cleaning up existing files")
-    cleanup_files(server_path)
 
     logger.info("Downloading server")
 
     depot_downloader.download_server(usr, pwd, server_path, manifest=False)
-    
+    cleanup_files(server_path)
+
     logger.info("Downloading mods")
 
     client_mods, server_mods = mods.download_mods(Path("/arma/mods.json"), usr, pwd, base_path/"mods", MAX_DOWNLOADS)
