@@ -20,7 +20,7 @@ def setup_logging():
 
     logger = logging.getLogger("Manager")
     logger.setLevel(logging.DEBUG)
-    logger.addHandler(server_file_handler)
+    logger.addHandler(manager_file_handler)
     logger.addHandler(console_handler)
 
     server_logger = logging.getLogger(name="server")

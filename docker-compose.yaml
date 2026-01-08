@@ -1,5 +1,5 @@
 services:
-  arma3:
+  arma3-server:
     build: .
     image: arma3-server:latest
     container_name: arma3-server
@@ -14,6 +14,8 @@ services:
       - "2306:2306"
     env_file:
       - .env
+    environment:
+      - UPDATE_ON_START=${UPDATE_ON_START}
     volumes:
       - ./arma:/arma:Z
       - ./arma/logs:/logs:Z
