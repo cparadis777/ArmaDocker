@@ -109,6 +109,8 @@ def cleanup_files(server_path:Path):
 
 
 if __name__ == "__main__":
+    import sys
+
     setup.setup_logging()
 
     load_dotenv()
@@ -122,30 +124,64 @@ if __name__ == "__main__":
     os.makedirs(base_path/"mpmissions", exist_ok=True)
     os.makedirs("/logs", exist_ok=True)
 
+    def perform_updates() -> tuple[list[mods.Mod], list[mods.Mod]]:
+        try:
+            logger.info("Downloading server")
+            depot_downloader.download_server(usr, pwd, server_path, manifest=False)
+            cleanup_files(server_path)
+
+            logger.info("Downloading mods")
+            client_mods, server_mods = mods.download_mods(Path("/arma/mods.json"), usr, pwd, base_path/"mods", MAX_DOWNLOADS)
+
+            logger.info("Copying mods and keys")
+            mods.copy_mods(mods_path=base_path/"mods/server_mods", server_path=server_path)
+            mods.copy_mods(mods_path=base_path/"mods/client_mods", server_path=server_path)
+
+            mods.copy_keys(mods_path=base_path/"mods/client_mods", server_path=server_path)
+            mods.copy_keys(mods_path=base_path, server_path=server_path)
+
+            logger.info("Copying missions and configs")
+            copy_missions_files(missions_path=base_path/"mpmissions", server_path=server_path)
+            copy_config(config_path=base_path/"server.cfg", server_path=server_path)
+            return client_mods, server_mods
+        except Exception:
+            logger.exception("Update failed during perform_updates")
+            return [], []
+
     logger.info("Cleaning up existing files")
 
-    logger.info("Downloading server")
+    update_on_start = os.environ.get("UPDATE_ON_START")  # '0' = quick start; otherwise run updates
+    logger.info(f"UPDATE_ON_START={update_on_start}")
 
-    depot_downloader.download_server(usr, pwd, server_path, manifest=False)
-    cleanup_files(server_path)
+    client_mods = server_mods = []
 
-    logger.info("Downloading mods")
-
-    client_mods, server_mods = mods.download_mods(Path("/arma/mods.json"), usr, pwd, base_path/"mods", MAX_DOWNLOADS)
-
-    logger.info("Copying mods and keys")
-
-    mods.copy_mods(mods_path=base_path/"mods/server_mods", server_path=server_path)
-    mods.copy_mods(mods_path=base_path/"mods/client_mods", server_path=server_path)
-
-    mods.copy_keys(mods_path=base_path/"mods/client_mods", server_path=server_path)
-    mods.copy_keys(mods_path=base_path, server_path=server_path)
-    
-    logger.info("Copying missions and configs")
-
-    copy_missions_files(missions_path=base_path/"mpmissions", server_path=server_path)
-    copy_config(config_path=base_path/"server.cfg", server_path=server_path)
+    if update_on_start == "0":
+        logger.info("Quick start requested (UPDATE_ON_START=0): skipping updates and starting server quickly")
+        # quick-start path: ensure server binary exists, recreate symlinks and keys
+        if not (server_path / "arma3server_x64").exists():
+            logger.warning("Quick-start requested but server binary missing; falling back to full update")
+            client_mods, server_mods = perform_updates()
+            if not client_mods and not server_mods:
+                logger.error("Updates failed; aborting startup")
+                sys.exit(1)
+        else:
+            try:
+                client_mods, server_mods = mods.parse_mod_config(base_path/"mods.json")
+                logger.info("Recreating mod and key symlinks for quick start")
+                mods.copy_mods(mods_path=base_path/"mods/server_mods", server_path=server_path)
+                mods.copy_mods(mods_path=base_path/"mods/client_mods", server_path=server_path)
+                mods.copy_keys(mods_path=base_path/"mods/client_mods", server_path=server_path)
+                mods.copy_keys(mods_path=base_path, server_path=server_path)
+                logger.info("Quick-start preflight complete; launching server")
+            except Exception:
+                logger.exception("Quick-start preflight failed; run with UPDATE_ON_START=1 to force updates or fix configuration")
+                sys.exit(1)
+    else:
+        logger.info("Update requested (UPDATE_ON_START != 0): running updates before starting server")
+        client_mods, server_mods = perform_updates()
+        if not client_mods and not server_mods:
+            logger.error("Updates failed and are required; aborting startup")
+            sys.exit(1)
 
     logger.info("Launching server")
-
     launch_server(server_path, client_mods, server_mods)
