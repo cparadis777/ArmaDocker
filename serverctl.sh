@@ -33,6 +33,7 @@ Examples:
 EOF
 }
 
+
 # determine compose command
 COMPOSE_CMD=${COMPOSE_CMD:-}
 if [ -z "${COMPOSE_CMD}" ]; then
@@ -52,20 +53,10 @@ if [ -z "${BASH_VERSION:-}" ]; then
   exit 2
 fi
 
-# Ensure script runs from repository root (script lives in repo root)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
-REPO_ROOT="${SCRIPT_DIR}"
-cd "${REPO_ROOT}"
-
-# Preflight checks
-if [ ! -f "${REPO_ROOT}/.env" ]; then
-  echo "Error: .env file not found. Please copy .env.example to .env and fill in your credentials." >&2
-  exit 1
-fi
-
-if [ ! -f "${REPO_ROOT}/arma/mods.json" ]; then
-  echo "Warning: arma/mods.json not found. No mods will be loaded." >&2
-fi
+# Ensure script runs from repository root (assumes script lives in scripts/)
+#SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+#REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+#cd "${REPO_ROOT}"
 
 if [ $# -lt 1 ]; then
   usage
@@ -108,18 +99,20 @@ run_compose() {
 case "$CMD" in
   start)
     echo "Starting server (mode=${MODE})..."
-    run_compose up -d --force-recreate
+    # Force recreate to ensure the chosen env var is applied on container creation
+    run_compose up -d --force-recreate 
     ;;
 
   stop)
     echo "Stopping server..."
-    ${COMPOSE_CMD} down
+    # 'down' removes containers; change to 'stop' if you prefer to keep containers
+    ${COMPOSE_CMD} down 
     ;;
 
   restart)
     echo "Restarting server (mode=${MODE})..."
     ${COMPOSE_CMD} down
-    run_compose up -d --force-recreate
+    run_compose up -d --force-recreate 
     ;;
 
   status)
