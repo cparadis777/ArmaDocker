@@ -105,7 +105,7 @@ def copy_cba_settings(settings_file) -> None:
     link = Path("/home/steam/arma3/userconfig/cba_settings.sqf")
     os.makedirs("/home/steam/arma3/userconfig")
 
-    if link.exists() or link.is_symlink:
+    if link.exists() or link.is_symlink():
         link.unlink()
 
     link.symlink_to(target)
@@ -225,8 +225,9 @@ if __name__ == "__main__":
             logger.exception("Update failed during perform_updates")
             sys.exit(1)
 
-    logger.info("Launching server")
     copy_missions_files(missions_path=base_path / "mpmissions", server_path=server_path)
     copy_config(config_path=base_path / "server.cfg", server_path=server_path)
     copy_cba_settings(base_path/"cba_settings.sqf")
+    logger.info("Launching server")
     launch_server(server_path, client_mods, server_mods)
+    logger.info("Server shutdown")
