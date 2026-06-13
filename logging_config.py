@@ -5,7 +5,7 @@ import datetime
 
 def setup_logging():
     now = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-    server_log_file = f"arma_{now}_server_.log"
+    server_log_file = f"arma_{now}_server.log"
     manager_log_file=f"arma_{now}_manager.log"
     log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 

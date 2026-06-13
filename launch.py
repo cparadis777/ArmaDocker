@@ -41,7 +41,7 @@ def launch_server(server_path: Path, client_mods: list[mods.Mod], server_mods: l
     command = [
         "./arma3server_x64",
         "-config=server.cfg",
-        "-filePatching"
+        "-filePatching",
         f"-name={server_name}",
     ] + server_mod_args + client_mod_args
     logger.info(f"Launching server with command: {' '.join(command)}")
