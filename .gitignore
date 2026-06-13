@@ -1,4 +1,16 @@
 .env
 .venv/
-arma/
 depotdownloader/
+__pycache__/
+
+# Ignore everything in the runtime arma directory except tracked configs
+arma/*
+!arma/mods.json
+!arma/server.cfg.template
+
+# Ignore runtime subdirectories
+arma/logs/
+arma/mods/
+arma/mpmissions/
+arma/keys/
+/arma/mods.json

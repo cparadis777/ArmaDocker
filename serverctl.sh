@@ -46,16 +46,26 @@ if [ -z "${COMPOSE_CMD}" ]; then
   fi
 fi
 
-# Require Bash (help avoid 'sh script.sh' which can misinterpret features)
+# Require Bash
 if [ -z "${BASH_VERSION:-}" ]; then
   echo "Error: this script requires Bash. Run it with 'bash serverctl.sh' or make it executable and run './serverctl.sh'" >&2
   exit 2
 fi
 
-# Ensure script runs from repository root (assumes script lives in scripts/)
+# Ensure script runs from repository root (script lives in repo root)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+REPO_ROOT="${SCRIPT_DIR}"
 cd "${REPO_ROOT}"
+
+# Preflight checks
+if [ ! -f "${REPO_ROOT}/.env" ]; then
+  echo "Error: .env file not found. Please copy .env.example to .env and fill in your credentials." >&2
+  exit 1
+fi
+
+if [ ! -f "${REPO_ROOT}/arma/mods.json" ]; then
+  echo "Warning: arma/mods.json not found. No mods will be loaded." >&2
+fi
 
 if [ $# -lt 1 ]; then
   usage
@@ -89,7 +99,6 @@ done
 
 run_compose() {
   if [ "${MODE}" = "quick" ] || [ "${MODE}" = "0" ]; then
-    # pass the env var only to the compose command using 'env' to ensure it's applied reliably
     env UPDATE_ON_START=0 ${COMPOSE_CMD} "$@"
   else
     env UPDATE_ON_START=1 ${COMPOSE_CMD} "$@"
@@ -99,13 +108,11 @@ run_compose() {
 case "$CMD" in
   start)
     echo "Starting server (mode=${MODE})..."
-    # Force recreate to ensure the chosen env var is applied on container creation
     run_compose up -d --force-recreate
     ;;
 
   stop)
     echo "Stopping server..."
-    # 'down' removes containers; change to 'stop' if you prefer to keep containers
     ${COMPOSE_CMD} down
     ;;
 
@@ -120,7 +127,6 @@ case "$CMD" in
     ;;
 
   logs)
-    # Follow logs for the service named in docker-compose: default 'arma3'
     ${COMPOSE_CMD} logs -f arma3-server
     ;;
 

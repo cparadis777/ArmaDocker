@@ -9,17 +9,26 @@ services:
       - "2304:2304/udp"
       - "2305:2305/udp"
       - "2306:2306/udp"
+      - "2302:2302/tcp"
+      - "2303:2303/tcp"
+      - "2304:2304/tcp"
+      - "2305:2305/tcp"
+      - "2306:2306/tcp"
     env_file:
       - .env
     environment:
-      - UPDATE_ON_START=${UPDATE_ON_START}
+      - UPDATE_ON_START=${UPDATE_ON_START:-1}
     volumes:
       - ./arma:/arma:Z
       - ./arma/logs:/logs:Z
       - server_files:/server
-      - credential_cache:/root/.local/
+      - credential_cache:/home/steam/.local/
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "arma3server_x64"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 volumes:
   credential_cache:
-    external: true
   server_files:
-    external: true
