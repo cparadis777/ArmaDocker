@@ -76,8 +76,7 @@ def copy_missions_files(missions_path: Path, server_path: Path) -> None:
         target = mission
         link = server_path / "mpmissions" / mission.name
 
-        if link.exists() or link.is_symlink():
-            link.unlink()
+        delete_or_unlink([link])
 
         link.symlink_to(target)
     
@@ -87,8 +86,7 @@ def copy_config(config_path:Path, server_path:Path) -> None:
     link = Path(server_path/config_path.name)
     
     # If symlink already exists, remove it first
-    if link.exists() or link.is_symlink():
-        link.unlink()
+    delete_or_unlink([link])
     
     link.symlink_to(target)
 
@@ -100,13 +98,13 @@ def delete_or_unlink(files: list[Path]) -> None:
         else:
             file.unlink()
 
-def copy_cba_settings(settings_file) -> None:
+def copy_cba_settings(settings_file: Path, server_path: Path) -> None:
     target = settings_file
-    link = Path("/home/steam/arma3/userconfig/cba_settings.sqf")
-    os.makedirs("/home/steam/arma3/userconfig")
+    userconfig = server_path / "userconfig"
+    os.makedirs(userconfig)
+    link = Path(userconfig / "cba_settings.sqf")
 
-    if link.exists() or link.is_symlink():
-        link.unlink()
+    delete_or_unlink([link])
 
     link.symlink_to(target)
     
@@ -174,9 +172,6 @@ def perform_updates() -> tuple[list[mods.Mod], list[mods.Mod]]:
     mods.copy_keys(mods_path=base_path / "mods/client_mods", server_path=server_path)
     mods.copy_keys(mods_path=base_path, server_path=server_path)
 
-    logger.info("Copying missions and configs")
-    copy_missions_files(missions_path=base_path / "mpmissions", server_path=server_path)
-    copy_config(config_path=base_path / "server.cfg", server_path=server_path)
     return client_mods, server_mods
 
 
@@ -225,9 +220,12 @@ if __name__ == "__main__":
             logger.exception("Update failed during perform_updates")
             sys.exit(1)
 
+    logger.info("Copying mission files")
     copy_missions_files(missions_path=base_path / "mpmissions", server_path=server_path)
+    logger.info("Copying server config")
     copy_config(config_path=base_path / "server.cfg", server_path=server_path)
-    copy_cba_settings(base_path/"cba_settings.sqf")
+    logger.info("Copying cba_settings.sqf")
+    copy_cba_settings(base_path/"cba_settings.sqf", server_path=server_path)
     logger.info("Launching server")
     launch_server(server_path, client_mods, server_mods)
     logger.info("Server shutdown")
